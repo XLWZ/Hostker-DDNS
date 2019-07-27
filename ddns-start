@@ -1,0 +1,94 @@
+#!/bin/sh
+# Hostker/Zhujike Dynamic DNS updater.
+
+# Configure
+
+# Hostker/Zhujike account Email
+EMAIL=${EMAIL:=}
+
+# API token: https://i.hostker.com/account/api
+TOKEN=${TOKEN:=}
+
+# One of these: https://i.zhujike.com/dns/showRecord/domain/
+# It needs to be pre-existing.
+DOMAIN=${DOMAIN:=}
+
+# Subdomain of $DOMAIN, or @ for the root.  Note: This script will not work if
+# you have multiple records with the same name.  We'll create the record if it
+# doesn't exist.
+HEADER=${HEADER:=}
+
+#Custom TTL
+TTL=${TTL:=300}
+
+################################################################################
+
+set -e
+
+fail() {
+	echo "$0: $@" >&2
+	[ -x /sbin/ddns_custom_updated ] && /sbin/ddns_custom_updated 0
+	exit 1
+}
+
+JSON_sh="$(dirname "$0")/JSON.sh"
+
+if [ ! -f "$JSON_sh" ]; then
+	curl --silent -o "$JSON_sh" \
+		"https://raw.githubusercontent.com/dominictarr/JSON.sh/master/JSON.sh" ||
+		fail "couldn't download JSON.sh"
+fi
+
+[ -x "$JSON_sh" ] || chmod +x "$JSON_sh"
+
+if [ -z "$1" ]; then
+	fail "usage: $0 ip-address"
+else
+	IP_ADDRESS="$1"
+fi
+
+req() {
+	curl --fail --silent "$@" ||
+		fail "invalid request"
+}
+
+get_listing() {
+	REQ="email=$EMAIL&token=$TOKEN&domain=$DOMAIN"
+	JSON=$(req -d "$REQ" "https://i.hostker.com/api/dnsGetRecords")
+	ALL=$(echo "$JSON" | "$JSON_sh" -b)
+
+	# Fine the line for the domain that include the name we've configure
+	LINE=$(echo "$ALL" | grep '\["records", [0-9]\+,"header"\]' |
+		grep "\"$HEADER\"")
+
+	# The index of this record is the 2nd field...
+	INDEX=$(echo "$LINE" | cut -d, -f2)
+
+	# Use the index to find the record's id
+	ID_LINE=$(echo "$ALL" | grep "\[\"records\",$INDEX,\"id\"\]")
+	ID=$(echo "$ID_LINE" | cut -f2)
+	echo "$ID"
+}
+
+create_record() {
+	REQ="email=$EMAIL&token=$TOKEN&domain=$DOMAIN&header=$HEADER&type=A&data=$IP_ADDRESS&ttl=$TTL"
+	req -d "$REQ" "https://i.hostker.com/api/dnsAddRecord"
+}
+
+update_record() {
+	REQ="email=$EMAIL&token=$TOKEN&id=$1&data=$IP_ADDRESS&ttl=$TTL"
+	req -d "$REQ" "https://i.hostker.com/api/dnsEditRecord"
+}
+
+EXISTING=$(get_listing)
+
+if [ -z "$EXISTING" ]; then
+	create_record &>/dev/null ||
+		fail "couldn't create record"
+else
+	update_record "$EXISTING" &>/dev/null ||
+		fail "couldn't update existing record"
+fi
+
+[ -x /sbin/ddns_custom_update ] && /sbin/ddns_custom_update 1
+exit 0
