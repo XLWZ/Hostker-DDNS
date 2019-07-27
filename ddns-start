@@ -35,8 +35,8 @@ JSON_sh="$(dirname "$0")/JSON.sh"
 
 if [ ! -f "$JSON_sh" ]; then
 	curl --silent -o "$JSON_sh" \
-		"https://raw.githubusercontent.com/dominictarr/JSON.sh/master/JSON.sh" ||
-		fail "couldn't download JSON.sh"
+		"https://raw.githubusercontent.com/dominictarr/JSON.sh/master/JSON.sh" \
+			|| fail "couldn't download JSON.sh"
 fi
 
 [ -x "$JSON_sh" ] || chmod +x "$JSON_sh"
@@ -48,7 +48,7 @@ else
 fi
 
 req() {
-	curl --fail --silent "$@" ||
+	curl --fail --silent "$@" || \
 		fail "invalid request"
 }
 
@@ -58,7 +58,7 @@ get_listing() {
 	ALL=$(echo "$JSON" | "$JSON_sh" -b)
 
 	# Fine the line for the domain that include the name we've configure
-	LINE=$(echo "$ALL" | grep '\["records", [0-9]\+,"header"\]' |
+	LINE=$(echo "$ALL" | grep '\["records", [0-9]\+,"header"\]' | \
 		grep "\"$HEADER\"")
 
 	# The index of this record is the 2nd field...
@@ -83,10 +83,10 @@ update_record() {
 EXISTING=$(get_listing)
 
 if [ -z "$EXISTING" ]; then
-	create_record &>/dev/null ||
+	create_record &>/dev/null || \
 		fail "couldn't create record"
 else
-	update_record "$EXISTING" &>/dev/null ||
+	update_record "$EXISTING" &>/dev/null || \
 		fail "couldn't update existing record"
 fi
 
