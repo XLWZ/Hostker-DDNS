@@ -12,6 +12,6 @@ Put `ddns-start` in `/jffs/scripts`
 
 Remember
 
-`chrom +x ./ddns-start`
+`chrom +x /jffs/scripts/ddns-start`
 
-Than in router setting enable DDNS, choose Custom.
+Then in router setting enable DDNS, choose Custom.
